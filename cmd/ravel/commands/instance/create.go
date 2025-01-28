@@ -2,7 +2,10 @@ package instance
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/valyentdev/ravel/cmd/ravel/util"
@@ -36,9 +39,29 @@ The instance spec is defined in a json or yaml file.`,
 }
 
 func createInstance(cmd *cobra.Command, id string, opt createOptions) error {
-	file, err := os.ReadFile(opt.config)
-	if err != nil {
-		return fmt.Errorf("unable to read config file %s: %w", opt.config, err)
+	var file []byte
+	var err error
+
+	if strings.HasPrefix(opt.config, "http") {
+		resp, err := http.Get(opt.config)
+		if err != nil {
+			return fmt.Errorf("unable to fetch config from URL %s: %w", opt.config, err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("failed to fetch config from URL %s: %s", opt.config, resp.Status)
+		}
+
+		file, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("unable to read config from URL %s: %w", opt.config, err)
+		}
+	} else {
+		file, err = os.ReadFile(opt.config)
+		if err != nil {
+			return fmt.Errorf("unable to read config file %s: %w", opt.config, err)
+		}
 	}
 
 	var config instance.InstanceConfig
